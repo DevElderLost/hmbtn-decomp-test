@@ -1,0 +1,7 @@
+src/main/cd/afile.c
+src/main/sound/cd_audio.c
+src/main/sound/sound.c
+src/overlay/10_PdaSamp/pdasamp.c
+src/overlay/15_saveload/saveload.c
+src/overlay/21_GF_MG3/mg3.c
+src/overlay/31_gf_mcard/mcard.c

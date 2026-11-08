@@ -5,3 +5,11 @@ __pycache__/
 /sdk/gcc-2.95.2/
 /sdk/bin/
 /objdiff.json
+
+# Android app (platform/android): SDL is cloned next to it, plus Gradle output.
+/platform/android/SDL/
+/platform/android/.gradle/
+/platform/android/.idea/
+/platform/android/local.properties
+/platform/android/app/build/
+/platform/android/app/.cxx/

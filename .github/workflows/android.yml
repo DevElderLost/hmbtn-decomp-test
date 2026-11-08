@@ -1,0 +1,43 @@
+# Build the native Android app (a debug-signed APK you can install directly) and run the
+# platform layer's host tests. Needs no game data.
+name: android
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  apk:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Host tests (touch layout, libpad shim)
+        run: sh platform/run_host_tests.sh
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+
+      - name: Fetch SDL2
+        run: git clone --depth 1 --branch release-2.30.9 https://github.com/libsdl-org/SDL.git platform/android/SDL
+
+      - name: Build the debug APK
+        run: |
+          NDK_VERSION="$(basename "$ANDROID_NDK_LATEST_HOME")"
+          echo "Using NDK $NDK_VERSION"
+          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses > /dev/null || true
+          gradle -p platform/android assembleDebug "-Phmbtn.ndkVersion=$NDK_VERSION" --no-daemon --stacktrace
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: hmbtn-android-debug-apk
+          path: platform/android/app/build/outputs/apk/debug/*.apk
+          if-no-files-found: error

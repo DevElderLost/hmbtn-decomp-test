@@ -1,0 +1,55 @@
+plugins {
+    id 'com.android.application'
+}
+
+// SDL2 is cloned next to this project (CI does it, see .github/workflows/android.yml):
+//   git clone --depth 1 --branch release-2.30.9 https://github.com/libsdl-org/SDL.git platform/android/SDL
+def sdlDir = file('../SDL')
+def abis = findProperty('hmbtn.abis').toString().split(',').collect { it.trim() }
+
+android {
+    namespace 'com.develderlost.hmbtn'
+    compileSdk 34
+    // The NDK to build with; CI passes the one installed on the runner.
+    ndkVersion = findProperty('hmbtn.ndkVersion') ?: '26.3.11579264'
+
+    defaultConfig {
+        applicationId 'com.develderlost.hmbtn'
+        minSdk 21
+        targetSdk 34
+        versionCode 1
+        versionName '0.1.0'
+
+        ndk {
+            abiFilters.addAll(abis)
+        }
+        externalNativeBuild {
+            cmake {
+                arguments "-DSDL_DIR=${sdlDir.absolutePath}", '-DANDROID_STL=c++_static'
+            }
+        }
+    }
+
+    externalNativeBuild {
+        cmake {
+            path file('jni/CMakeLists.txt')
+            version '3.22.1'
+        }
+    }
+
+    sourceSets {
+        main {
+            // SDL's Java side (SDLActivity and friends) comes from the SDL checkout.
+            java.srcDirs = ['src/main/java', "${sdlDir}/android-project/app/src/main/java".toString()]
+        }
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+        }
+    }
+    lint {
+        abortOnError false
+    }
+}

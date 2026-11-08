@@ -1,0 +1,4 @@
+// Needs Gradle 8.7 or newer and JDK 17 (the CI workflow uses Gradle 8.9).
+plugins {
+    id 'com.android.application' version '8.5.2' apply false
+}
