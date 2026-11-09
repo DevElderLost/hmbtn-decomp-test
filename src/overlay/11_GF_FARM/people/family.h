@@ -59,7 +59,7 @@ void family_reset(void);
 void family_set_bride(s16 mode);
 void family_child_born(void);
 void family_daily_update(void);
-s32 family_table_lookup(void);
+addr32 family_table_lookup(void);
 
 
 #endif /* FAMILY_H */

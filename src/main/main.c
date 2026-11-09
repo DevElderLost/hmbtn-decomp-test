@@ -554,8 +554,8 @@ u8 *main_region_free_start(void) {
     return region_base - main_region_free_bytes();
 }
 
-s32 main_get_region_base(void) {
-    return (s32)region_base;
+addr32 main_get_region_base(void) {
+    return (addr32)region_base;
 }
 
 /* Start a frame: point the GS work area at its work base, select its ordering-table block (0x3000

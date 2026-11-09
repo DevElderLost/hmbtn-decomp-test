@@ -21,12 +21,12 @@ typedef struct {
 } GsOT;
 
 typedef struct {
-    int32_t vx, vy, vz;
+    long vx, vy, vz;
     uint8_t r, g, b;
     uint8_t pad;
 } GsF_LIGHT;
 
-typedef uint32_t PACKET;
+typedef unsigned char PACKET;
 
 extern MATRIX GsIDMATRIX;
 

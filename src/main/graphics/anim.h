@@ -124,7 +124,11 @@ typedef struct VramPlace {
  * packs carry one more word, start[count + 1], the start of a second texture pack. */
 typedef struct AnimPackToc {
     s32 count;
+#ifdef HMBTN_NATIVE
+    s32 start[];    /* the tables are initialised with their words; a current gcc drops them from a [0] */
+#else
     s32 start[0];
+#endif
 } AnimPackToc;
 
 /* The count and the offsets are one run of words, so the k-th start is reached by

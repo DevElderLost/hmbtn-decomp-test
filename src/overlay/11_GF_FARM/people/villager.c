@@ -937,7 +937,7 @@ static s32 facing_angles[4] = {
 /* Try to greet every villager near the player (within GREET_RANGE_SQ) and in front of
  * them (within GREET_ANGLE units of the way the player faces). Each one rolls in
  * villager_try_greet. */
-s32 player_start_nearby_actions(FarmPlayer *player)
+addr32 player_start_nearby_actions(FarmPlayer *player)
 {
     FarmVillager *item;
     s32 i;

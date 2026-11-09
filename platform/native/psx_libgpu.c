@@ -11,6 +11,21 @@
 void (*psx_vsync_hook)(void);
 
 static int vblank_count;
+static void (*vblank_hooks[8])(void);
+static int vblank_hook_count;
+
+void psx_vblank_add_hook(void (*hook)(void)) {
+    int i;
+    for (i = 0; i < vblank_hook_count; i++) {
+        if (vblank_hooks[i] == hook) {
+            return;
+        }
+    }
+    if (vblank_hook_count < 8) {
+        vblank_hooks[vblank_hook_count++] = hook;
+    }
+}
+
 static void (*vsync_callback)(void);
 static int gpu_ready;
 
@@ -68,6 +83,12 @@ int VSync(int mode) {
             psx_vsync_hook();
         }
         vblank_count++;
+        {
+            int i;
+            for (i = 0; i < vblank_hook_count; i++) {
+                vblank_hooks[i]();
+            }
+        }
         if (vsync_callback != NULL) {
             vsync_callback();
         }

@@ -1,24 +1,33 @@
 /* SDL front end of the native port: the window, the input sources (touch, game controller,
  * keyboard), the on-screen controller, and the console's picture.
  *
- * It maps the console's address space, runs the demo scene through the compat libraries and
- * shows the software GPU's display area, with the controller drawn over it. The 16-bit mask
- * shown at the top is decoded from the libpad shim's receive buffer the way
- * src/main/input/pad.c decodes a real pad, so it exercises the same path the game will use.
- * If the address space cannot be mapped it falls back to an input test screen. */
+ * It maps the console's address space, opens the disc image and a memory card from the app's
+ * folder, and runs the game's own main() (renamed hmbtn_game_main). The game calls VSync() once
+ * a frame, and that is where this file's frontend_vblank() runs: events, the pad, and the
+ * software GPU's display area with the controller drawn over it. A message from the game
+ * (SystemError, a file the disc does not have) is shown on screen.
+ *
+ * Without a disc, or when built without the game, it runs the demo scene instead. If the address
+ * space cannot be mapped it shows an input test screen. */
 
+#include <ctype.h>
 #include <math.h>
+#include <setjmp.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include <SDL.h>
 
 #include "demo_cube.h"
 #include "libpad.h"
 #include "psx_buttons.h"
+#include "psx_cd.h"
 #include "psx_gpu.h"
 #include "psx_libgpu.h"
+#include "psx_mcard.h"
 #include "psx_mem.h"
 #include "psx_pad.h"
+#include "psx_platform.h"
 #include "touch_pad.h"
 
 #define PI_F 3.14159265f
@@ -171,7 +180,7 @@ static uint16_t keyboard_mask(void) {
 #define G(a, b, c, d, e) ((uint16_t)(((a) << 12) | ((b) << 9) | ((c) << 6) | ((d) << 3) | (e)))
 
 static uint16_t glyph(char c) {
-    switch (c) {
+    switch (toupper((unsigned char)c)) {
     case '0': return G(7, 5, 5, 5, 7);
     case '1': return G(2, 6, 2, 2, 7);
     case '2': return G(7, 1, 7, 4, 7);
@@ -200,6 +209,21 @@ static uint16_t glyph(char c) {
     case 'R': return G(6, 5, 6, 5, 5);
     case 'S': return G(7, 4, 7, 1, 7);
     case 'T': return G(7, 2, 2, 2, 2);
+    case 'J': return G(1, 1, 1, 5, 7);
+    case 'Q': return G(7, 5, 5, 7, 1);
+    case 'U': return G(5, 5, 5, 5, 7);
+    case 'V': return G(5, 5, 5, 5, 2);
+    case 'W': return G(5, 5, 7, 7, 5);
+    case 'X': return G(5, 5, 2, 5, 5);
+    case 'Y': return G(5, 5, 2, 2, 2);
+    case 'Z': return G(7, 1, 2, 4, 7);
+    case '.': return G(0, 0, 0, 0, 2);
+    case ':': return G(0, 2, 0, 2, 0);
+    case ';': return G(0, 2, 0, 2, 4);
+    case '-': return G(0, 0, 7, 0, 0);
+    case '_': return G(0, 0, 0, 0, 7);
+    case '/': return G(1, 1, 2, 4, 4);
+    case '\\': return G(4, 4, 2, 1, 1);
     default: return 0;
     }
 }
@@ -346,6 +370,10 @@ static void draw_pad(SDL_Renderer *r, const TouchPadLayout *l, uint16_t held) {
     }
 }
 
+#ifdef HMBTN_GAME
+extern int hmbtn_game_main(void);
+#endif
+
 /* ---- frame ----------------------------------------------------------------------------- */
 
 static SDL_Window *window;
@@ -358,7 +386,37 @@ static int have_ram;
 static int paced_by_vsync;
 static unsigned char pad_buffers[2][34];
 static uint16_t held_mask;
+static int in_game;                     /* the game's main() is running */
+static jmp_buf quit_jump;               /* where a quit or a fatal message leaves the game */
+static char message[512];               /* shown on screen when not empty */
+static char status_line[256];           /* a note under the title */
+static char data_dir[512];              /* the disc image and the memory card live here */
 static uint32_t frame_pixels[640 * 512];
+
+/* Draw `text` in lines that fit `width` pixels, from (x, y). */
+static void draw_wrapped(SDL_Renderer *r, float x, float y, float scale, float width, const char *text) {
+    const int per_line = (int)(width / (4.0f * scale));
+    const char *p = text;
+
+    if (per_line < 8) {
+        return;
+    }
+    while (*p != 0) {
+        char line[160];
+        int n = 0;
+        while (n < per_line && n < (int)sizeof(line) - 1 && p[n] != 0 && p[n] != '\n') {
+            n++;
+        }
+        memcpy(line, p, (size_t)n);
+        line[n] = 0;
+        draw_text(r, x, y, scale, line);
+        y += 7.0f * scale;
+        p += n;
+        if (*p == '\n') {
+            p++;
+        }
+    }
+}
 
 /* Draw the GPU's display rectangle, letterboxed in the window. */
 static void draw_console_screen(int window_w, int window_h) {
@@ -436,6 +494,9 @@ static void frontend_vblank(void) {
             break;
         }
     }
+    if (!running && in_game) {
+        longjmp(quit_jump, 1);              /* the game's loop never returns on its own */
+    }
 
     SDL_GetRendererOutputSize(renderer, &width, &height);
     if (width != layout.width || height != layout.height) {
@@ -447,12 +508,13 @@ static void frontend_vblank(void) {
     requested = touch_mask(&layout) | controller_mask() | keyboard_mask();
     psx_pad_set_buttons(0, requested);
     psx_pad_commit();
-    held_mask = (uint16_t)~(((unsigned)pad_buffers[0][2] << 8) | pad_buffers[0][3]);
+    /* The game hands the shim its own buffers; before that, read this file's. */
+    held_mask = in_game ? requested : (uint16_t)~(((unsigned)pad_buffers[0][2] << 8) | pad_buffers[0][3]);
 
     SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_NONE);
     SDL_SetRenderDrawColor(renderer, 0x12, 0x12, 0x1A, 0xFF);
     SDL_RenderClear(renderer);
-    if (have_ram) {
+    if (have_ram && message[0] == 0) {
         draw_console_screen(width, height);
     }
 
@@ -467,11 +529,60 @@ static void frontend_vblank(void) {
     snprintf(text, sizeof(text), "PAD %04X", held_mask);
     draw_text_centered(renderer, (float)width * 0.5f, 0.12f * layout.unit, layout.unit / 100.0f, text);
 
-    draw_pad(renderer, &layout, held_mask);
+    if (status_line[0] != 0 && message[0] == 0) {
+        SDL_SetRenderDrawColor(renderer, 0xFF, 0xD0, 0x60, 0xE0);
+        draw_wrapped(renderer, 0.05f * (float)width, 0.86f * (float)height - 7.0f * layout.unit / 140.0f, layout.unit / 140.0f,
+                     0.9f * (float)width, status_line);
+    }
+    if (message[0] != 0) {
+        SDL_SetRenderDrawColor(renderer, 0xFF, 0x90, 0x90, 0xFF);
+        draw_wrapped(renderer, 0.05f * (float)width, 0.22f * (float)height, layout.unit / 70.0f, 0.9f * (float)width,
+                     message);
+    } else {
+        draw_pad(renderer, &layout, held_mask);
+    }
     SDL_RenderPresent(renderer);
     if (!paced_by_vsync) {
         SDL_Delay(16);
     }
+}
+
+/* ---- the disc and the card -------------------------------------------------------------- */
+
+/* A message the game cannot go on after: keep it and leave the game. */
+static void frontend_fatal(const char *text) {
+    snprintf(message, sizeof(message), "%s", text);
+    SDL_Log("fatal: %s", text);
+    longjmp(quit_jump, 2);
+}
+
+/* The first disc image in the data folder: disc.bin, disc.iso or disc.img. Returns 0 if found. */
+static int find_disc(char *path, size_t size) {
+    static const char *const names[] = {"disc.bin", "disc.iso", "disc.img", "game.bin", "game.iso"};
+    size_t i;
+    for (i = 0; i < sizeof(names) / sizeof(names[0]); i++) {
+        FILE *f;
+        snprintf(path, size, "%s/%s", data_dir, names[i]);
+        f = fopen(path, "rb");
+        if (f != NULL) {
+            fclose(f);
+            return 0;
+        }
+    }
+    return -1;
+}
+
+static void choose_data_dir(int argc, char **argv) {
+    const char *dir = NULL;
+#ifdef __ANDROID__
+    dir = SDL_AndroidGetExternalStoragePath();
+#endif
+    if (argc > 1) {
+        dir = argv[1];
+    } else if (getenv("HMBTN_DIR") != NULL) {
+        dir = getenv("HMBTN_DIR");
+    }
+    snprintf(data_dir, sizeof(data_dir), "%s", dir != NULL ? dir : ".");
 }
 
 /* ---- main ------------------------------------------------------------------------------ */
@@ -480,9 +591,8 @@ int main(int argc, char *argv[]) {
     SDL_RendererInfo info;
     Uint32 window_flags = SDL_WINDOW_ALLOW_HIGHDPI;
 
-    (void)argc;
-    (void)argv;
     memset(&layout, 0, sizeof(layout));
+    choose_data_dir(argc, argv);
 
     SDL_SetHint(SDL_HINT_ORIENTATIONS, "LandscapeLeft LandscapeRight");
     SDL_SetHint(SDL_HINT_TOUCH_MOUSE_EVENTS, "0");
@@ -521,12 +631,37 @@ int main(int argc, char *argv[]) {
 
     /* The console's address space, then the demo scene. */
     have_ram = psx_mem_init() == 0;
-    SDL_Log("console address space: %s", have_ram ? "mapped" : "NOT mapped");
+    SDL_Log("console address space: %s; data folder: %s", have_ram ? "mapped" : "NOT mapped", data_dir);
     if (have_ram) {
+        char path[640];
+        const int have_disc = find_disc(path, sizeof(path)) == 0 && psx_cd_open(path) == 0;
+
         psx_vsync_hook = frontend_vblank;
-        demo_init();
-        while (running) {
-            demo_frame(held_mask);
+        psx_fatal_hook = frontend_fatal;
+        snprintf(path, sizeof(path), "%s/memcard1.mcr", data_dir);
+        psx_mcard_attach(0, path);
+
+#ifdef HMBTN_GAME
+        if (have_disc) {
+            SDL_Log("disc found; starting the game");
+            in_game = 1;
+            if (setjmp(quit_jump) == 0) {
+                hmbtn_game_main();
+            }
+            in_game = 0;
+            while (running) {          /* a message from the game, or its main returned */
+                frontend_vblank();
+            }
+        } else
+#endif
+        {
+            snprintf(status_line, sizeof(status_line), "NO DISC: PUT DISC.BIN IN %s", data_dir);
+            SDL_Log("%s", status_line);
+            (void)have_disc;
+            demo_init();
+            while (running) {
+                demo_frame(held_mask);
+            }
         }
         psx_mem_shutdown();
     } else {

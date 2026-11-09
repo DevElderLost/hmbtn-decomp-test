@@ -5,14 +5,18 @@
  * console's layouts; the functions are implemented in platform/native/psx_libgte.c on top of
  * the software GTE. */
 
+#include <math.h>
 #include <sys/types.h>
+#include <kernel.h>
+#include <libapi.h>
 
 typedef struct {
     int16_t vx, vy, vz, pad;
 } SVECTOR;
 
+/* `long`, as in the SDK: the game walks a VECTOR or a MATRIX's t through `long *`. */
 typedef struct {
-    int32_t vx, vy, vz, pad;
+    long vx, vy, vz, pad;
 } VECTOR;
 
 typedef struct {
@@ -25,7 +29,7 @@ typedef struct {
 
 typedef struct {
     int16_t m[3][3];
-    int32_t t[3];
+    long t[3];
 } MATRIX;
 
 /* Angles are 4096 to a turn; sine and cosine are scaled by 4096. */
@@ -55,7 +59,7 @@ MATRIX *MulMatrix0(MATRIX *m0, MATRIX *m1, MATRIX *m2);
 void PushMatrix(void);
 void PopMatrix(void);
 
-int32_t RotTrans(SVECTOR *v0, VECTOR *v1, int32_t *flag);
+long RotTrans(SVECTOR *v0, VECTOR *v1, long *flag);
 VECTOR *ApplyMatrixLV(MATRIX *m, VECTOR *v0, VECTOR *v1);
 VECTOR *OuterProduct0(VECTOR *v0, VECTOR *v1, VECTOR *v2);
 

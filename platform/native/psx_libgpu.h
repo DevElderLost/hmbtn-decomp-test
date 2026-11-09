@@ -9,6 +9,10 @@
  * and paces to the display here. If NULL, VSync does not wait. */
 extern void (*psx_vsync_hook)(void);
 
+/* Register a function VSync() calls once per vertical blank (the CD drive uses this to
+ * advance its read head). Up to 8. */
+void psx_vblank_add_hook(void (*hook)(void));
+
 /* The vertical-blank counter (what VSync(-1) returns). */
 int psx_vblank_count(void);
 

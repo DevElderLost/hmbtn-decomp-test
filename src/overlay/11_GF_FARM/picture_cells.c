@@ -396,7 +396,7 @@ s32 item_villager_reaction(s16 id, s16 slot) {
     if (flags & ITEM_FLAG_TOOL) {
         return -2;
     }
-    codes = (s32 *)(picture * 16 + (s32)game_state.pictureCodes) + (slot / 10);
+    codes = (s32 *)ADDR_OFFSET(picture * 16, game_state.pictureCodes) + (slot / 10);
     reaction = *codes >> ((slot % 10) * 3);
     reaction &= 7;
     if (flags & 0x180) {

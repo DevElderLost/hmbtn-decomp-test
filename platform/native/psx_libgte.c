@@ -212,14 +212,14 @@ void PopMatrix(void) {
 /* ---- vectors --------------------------------------------------------------------------- */
 
 /* v1 = RT * v0 + TR, through the GTE; *flag receives its FLAG register. */
-int32_t RotTrans(SVECTOR *v0, VECTOR *v1, int32_t *flag) {
+long RotTrans(SVECTOR *v0, VECTOR *v1, long *flag) {
     gte_ldv0(v0);
     psx_gte_exec(0x4A480012);
     gte_stlvnl(v1);
     if (flag != NULL) {
-        *flag = (int32_t)psx_gte_cfc2(GTEC_FLAG);
+        *flag = (long)psx_gte_cfc2(GTEC_FLAG);
     }
-    return (int32_t)(psx_gte_mfc2(GTE_MAC3) >> 2);
+    return (long)((int32_t)psx_gte_mfc2(GTE_MAC3) >> 2);
 }
 
 VECTOR *ApplyMatrixLV(MATRIX *m, VECTOR *v0, VECTOR *v1) {

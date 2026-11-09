@@ -81,7 +81,7 @@ void family_daily_update(void) {
 u32 family_tables[5] = {0x80127F98, 0x80127FA4, 0x80127FAC, 0x80127FB8, 0x80127FC4};
 
 /* The family_tables entry of the current wife. */
-s32 family_table_lookup(void) {
+addr32 family_table_lookup(void) {
     return family_tables[game_state.family.wifeIndex];
 }
 

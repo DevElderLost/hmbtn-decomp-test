@@ -1460,7 +1460,7 @@ static void event_object_draw(FarmPositionObject *object, AnimState *item)
 static void event_block_unpack(u16 *buffer)
 {
     u32 size;
-    s32 top;
+    addr32 top;
     u32 length;
     s32 entry;
     u8 *results;
@@ -1535,7 +1535,7 @@ static s32 event_block_first_size(FarmEventBlock *block)
 /* Offset of entry index in the block. */
 static s32 event_block_entry(FarmEventBlock *block, s32 index)
 {
-    return *(s32 *)((index << 2) + (s32)block->entryOffsets);
+    return *(s32 *)ADDR_OFFSET(index << 2, block->entryOffsets);
 }
 
 /* Data of entry index in the block. */

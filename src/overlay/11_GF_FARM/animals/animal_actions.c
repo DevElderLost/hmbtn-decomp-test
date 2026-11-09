@@ -672,12 +672,12 @@ static s32 farm_pick_random_slot(u16 mode)
         large_offset = 0;
         do {
             if (mode == 0) {
-                record = (FarmRecordHead *)(large_offset + (s32)large);
+                record = (FarmRecordHead *)ADDR_OFFSET(large_offset, large);
                 if ((record->flags & mask) != 0 || record->location != wanted) {
                     goto next;
                 }
             } else {
-                record = (FarmRecordHead *)(small_offset + (s32)small);
+                record = (FarmRecordHead *)ADDR_OFFSET(small_offset, small);
                 if ((record->flags & mask) != 0 || record->location != wanted) {
                     goto next;
                 }

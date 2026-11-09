@@ -205,7 +205,7 @@ void villager_clear_flag_bit4_all(void);
 s32 villager_is_bachelorette(CharacterId villager);
 void family_flags_update(void);
 void player_records_tick(void);
-s32 player_start_nearby_actions(struct FarmPlayer *player);
+addr32 player_start_nearby_actions(struct FarmPlayer *player);
 void villager_affection_decay(void);
 void farm_time_event_tick(void);
 

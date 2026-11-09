@@ -12,7 +12,7 @@ rm -rf "$tmp"
 mkdir -p "$tmp"
 
 inc=$(grep -oE 'src/[A-Za-z0-9_/]+' CMakeLists.txt | sort -u | while read -r d; do [ -d "$d" ] && printf -- '-I%s ' "$d"; done)
-flags="-std=gnu11 -fsyntax-only -funsigned-char -w -Iplatform/compat/override -Iplatform/compat/psyq -Iplatform/compat -Iplatform/native $inc -Isrc"
+flags="-std=gnu11 -fsyntax-only -funsigned-char -DHMBTN_NATIVE -D_LANGUAGE_C -D__CHAR_UNSIGNED__ -w -Iplatform/compat/override -Iplatform/compat/psyq -Iplatform/compat -Iplatform/native $inc -Isrc"
 
 : > "$tmp/failed"
 total=0
